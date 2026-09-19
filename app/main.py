@@ -21,6 +21,10 @@ from app.routers import (
 
 app = FastAPI(title="POS API")
 
+@app.get("/")
+def health_check():
+    return {"status": "ok", "service": "POS API"}
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
