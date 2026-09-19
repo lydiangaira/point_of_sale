@@ -1,24 +1,19 @@
-from pydantic import BaseModel, Field
-from uuid import UUID
 from datetime import datetime
-from enum import Enum
+from uuid import UUID
 
-class ReceiptFormat(str, Enum):
-    PDF = "PDF"
-    SMS = "SMS"
-    EMAIL = "Email"
-    PRINTED = "Printed"
+from pydantic import BaseModel, ConfigDict
+
+from app.models.receipt import ReceiptFormat
 
 class ReceiptCreate(BaseModel):
     sale_id: UUID
     format: ReceiptFormat = ReceiptFormat.PRINTED
 
-class ReceiptResponse(BaseModel):
+class ReceiptRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     receipt_id: UUID
     sale_id: UUID
     receipt_number: str
     format: ReceiptFormat
     issued_date: datetime
-
-    class Config:
-        from_attributes = True

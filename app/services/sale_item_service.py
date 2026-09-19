@@ -2,9 +2,9 @@ from sqlalchemy.orm import Session
 from uuid import UUID
 from typing import List
 from fastapi import HTTPException, status
-from repositories.sale_item_repository import SaleItemRepository
-from schemas.sale_item import SaleItemCreate
-from models.sale_item import SaleItem
+from app.repositories.sale_item_repository import SaleItemRepository
+from app.schemas.sale_item import SaleItemCreate
+from app.models.sale_item import SaleItem
 
 class SaleItemService:
     def __init__(self, db: Session):

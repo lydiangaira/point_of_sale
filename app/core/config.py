@@ -1,25 +1,34 @@
+from functools import lru_cache
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field
+
 
 class Settings(BaseSettings):
-    
-    PROJECT_NAME: str = "Secure POS Backend API"
-    VERSION: str = "1.0.0"
-    API_V1_STR: str = "/api/v1"
-    
-    
-    SECRET_KEY: str = Field("09d25e094faa6ca2556c818166b7a9563b93f7099f6f0f4caa6cf63b88e8d3e7", alias="SECRET_KEY")
-    ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 8
-    
-    
-    DATABASE_URL: str = Field("postgresql://postgres:postgres@localhost:5432/pos", alias="DATABASE_URL")
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    model_config = SettingsConfigDict(
-        env_file=".env", 
-        env_file_encoding="utf-8", 
-        extra="ignore"
-    )
+    database_url: str = "postgresql+psycopg2://user:pass@localhost:5432/pos"
 
-settings = Settings()
+    jwt_access_algorithm: str = "RS256"
+    jwt_private_key: str
+    jwt_public_key: str
+
+    jwt_refresh_algorithm: str = "HS256"
+    jwt_secret_key: str
+
+    access_token_expire_minutes: int = 15
+    refresh_token_expire_days: int = 7
+
+    login_rate_limit: str = "5/minute"
+    default_rate_limit: str = "100/minute"
+
+    tax_rate: float = 0.0
+
+    cors_origins: list[str] = []
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()
+
+
+settings = get_settings()

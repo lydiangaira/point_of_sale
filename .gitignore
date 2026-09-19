@@ -2,3 +2,6 @@ env/
 **/__pycache__/
 .env
 *.pyc
+jwt_rsa_new.key
+jwt_private_b64.txt
+jwt_public_b64.txt

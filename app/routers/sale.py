@@ -1,32 +1,40 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
 from uuid import UUID
-from typing import List
-from database import get_db
-from schemas.sale import SaleCreate, SaleUpdate, SaleResponse
-from repositories.sale_repository import SaleRepository
 
-router = APIRouter(prefix="/sales", tags=["Sales"])
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
-@router.post("/", response_model=SaleResponse, status_code=status.HTTP_201_CREATED)
-def create_sale_ticket(sale_in: SaleCreate, db: Session = Depends(get_db)):
-    return SaleRepository(db).create(sale_in)
+from app.database import get_db
+from app.dependency import get_current_user, require_roles
+from app.models.user import User, UserRole
+from app.repositories.sale_repository import sale_repository
+from app.schemas.sale import SaleCreate, SaleRead
+from app.services import sale_service
 
-@router.get("/", response_model=List[SaleResponse])
-def read_sales_ledger(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    return SaleRepository(db).get_all(skip=skip, limit=limit)
+router = APIRouter(prefix="/sales", tags=["sales"], dependencies=[Depends(get_current_user)])
+manage = require_roles(UserRole.ADMIN, UserRole.STORE_MANAGER)
 
-@router.get("/{sale_id}", response_model=SaleResponse)
-def read_sale_by_id(sale_id: UUID, db: Session = Depends(get_db)):
-    sale = SaleRepository(db).get_by_id(sale_id)
-    if not sale:
-        raise HTTPException(status_code=404, detail="Sale record not found")
+@router.post("", response_model=SaleRead, status_code=201)
+def create_sale(data: SaleCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return sale_service.create_sale(db, data, current_user)
+
+@router.get("", response_model=list[SaleRead])
+def list_sales(skip: int = 0, limit: int = 100, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    if current_user.role in (UserRole.ADMIN, UserRole.STORE_MANAGER):
+        from models.sale import Sale
+
+        return db.query(Sale).offset(skip).limit(limit).all()
+    return sale_repository.list_by_user(db, current_user.user_id, skip=skip, limit=limit)
+
+@router.get("/{sale_id}", response_model=SaleRead)
+def get_sale(sale_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    sale = sale_service.get_sale(db, sale_id)
+    sale_service.authorize_sale_access(sale, current_user)
     return sale
 
-@router.put("/{sale_id}", response_model=SaleResponse)
-def update_sale_meta(sale_id: UUID, sale_in: SaleUpdate, db: Session = Depends(get_db)):
-    repo = SaleRepository(db)
-    sale = repo.get_by_id(sale_id)
-    if not sale:
-        raise HTTPException(status_code=404, detail="Sale record not found")
-    return repo.update_status(sale, sale_in)
+@router.post("/{sale_id}/cancel", response_model=SaleRead)
+def cancel_sale(sale_id: UUID, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    return sale_service.cancel_sale(db, sale_id, current_user)
+
+@router.post("/{sale_id}/refund", response_model=SaleRead, dependencies=[Depends(manage)])
+def refund_sale(sale_id: UUID, db: Session = Depends(get_db)):
+    return sale_service.refund_sale(db, sale_id)

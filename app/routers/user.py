@@ -1,41 +1,47 @@
-from fastapi import APIRouter, Depends, status
+from uuid import UUID
+
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from database import get_db
-from services.user_service import UserService
-from schemas.user import UserCreate, UserUpdate, UserRead
+
+from app.database import get_db
+from app.dependency import get_current_user, require_roles
+from app.models.user import User, UserRole
+from app.schemas.user import UserCreate, UserRead, UserUpdate
+from app.services import user_service
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-@router.post("/", response_model=UserRead, status_code=status.HTTP_201_CREATED)
+# No POST /users/register anywhere in this API. Account creation always
+# goes through this admin-gated endpoint.
+admin_only = require_roles(UserRole.ADMIN)
+
+@router.post("", response_model=UserRead, status_code=201, dependencies=[Depends(admin_only)])
 def create_user(data: UserCreate, db: Session = Depends(get_db)):
-    service = UserService(db)  # <-- We instantiate with db here
-    return service.create_user(data)  # <-- Then call the method with only data
+    return user_service.create_user(db, data)
 
-@router.get("/", response_model=list[UserRead])
-def list_users(db: Session = Depends(get_db)):
-    service = UserService(db)
-    # If list_users doesn't exist in your service, we use your repo fallback:
-    return service.repo.get_all() 
+@router.get("", response_model=list[UserRead], dependencies=[Depends(admin_only)])
+def list_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
+    from repositories.user_repository import user_repository
 
-@router.get("/{user_id}", response_model=UserRead)
-def get_user(user_id: int, db: Session = Depends(get_db)):
-    service = UserService(db)
-    user = service.repo.get_by_id(user_id)
-    if not user:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="User not found.")
-    return user
+    return user_repository.list(db, skip=skip, limit=limit)
 
-@router.put("/{user_id}", response_model=UserRead)
-def update_user(user_id: int, data: UserUpdate, db: Session = Depends(get_db)):
-    service = UserService(db)
-    return service.update_user(user_id, data)
+@router.get("/{user_id}", response_model=UserRead, dependencies=[Depends(admin_only)])
+def get_user(user_id: UUID, db: Session = Depends(get_db)):
+    return user_service.get_user(db, user_id)
 
-@router.delete("/{user_id}", response_model=UserRead)
-def delete_user(user_id: int, db: Session = Depends(get_db)):
-    service = UserService(db)
-    user = service.repo.get_by_id(user_id)
-    if not user:
-        from fastapi import HTTPException
-        raise HTTPException(status_code=404, detail="User not found.")
-    return service.repo.delete(user)
+@router.patch("/{user_id}", response_model=UserRead)
+def update_user(
+    user_id: UUID,
+    data: UserUpdate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    return user_service.update_user(db, user_id, data, current_user)
+
+@router.delete("/{user_id}", status_code=204, dependencies=[Depends(admin_only)])
+def deactivate_user(
+    user_id: UUID,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    user_service.deactivate_user(db, user_id, current_user)

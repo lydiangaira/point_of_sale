@@ -1,34 +1,26 @@
-from pydantic import BaseModel, Field
-from uuid import UUID
 from datetime import datetime
 from decimal import Decimal
-from enum import Enum
+from uuid import UUID
 
-class PaymentMethod(str, Enum):
-    CASH = "Cash"
-    CARD = "Card"
-    MOBILE_MONEY = "Mobile Money"
-    BANK_TRANSFER = "Bank Transfer"
+from pydantic import BaseModel, ConfigDict, Field
 
-class PaymentStatus(str, Enum):
-    PENDING = "Pending"
-    COMPLETED = "Completed"
-    FAILED = "Failed"
-    REFUNDED = "Refunded"
+from app.models.payment import PaymentMethod, PaymentStatus
 
 class PaymentCreate(BaseModel):
     sale_id: UUID
     payment_method: PaymentMethod
-    amount: Decimal = Field(..., max_digits=10, decimal_places=2, ge=0)
+    amount: Decimal = Field(gt=0, max_digits=10, decimal_places=2)
 
-class PaymentResponse(BaseModel):
+class PaymentStatusUpdate(BaseModel):
+    status: PaymentStatus
+
+
+class PaymentRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     payment_id: UUID
     sale_id: UUID
     payment_method: PaymentMethod
     amount: Decimal
     status: PaymentStatus
     payment_date: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True

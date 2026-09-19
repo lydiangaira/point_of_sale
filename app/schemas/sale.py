@@ -1,29 +1,37 @@
-from pydantic import BaseModel, Field
-from uuid import UUID
-from datetime import datetime
-from typing import List, Optional
-from decimal import Decimal
-from enum import Enum
+from typing import Optional
 
-class SaleStatus(str, Enum):
-    PENDING = "Pending"
-    COMPLETED = "Completed"
-    CANCELLED = "Cancelled"
-    REFUNDED = "Refunded"
+from datetime import datetime
+from decimal import Decimal
+from uuid import UUID
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from app.models.sale import SaleStatus
+
+class SaleItemInput(BaseModel):
+    product_id: UUID
+    quantity: int = Field(gt=0, le=10_000)
 
 class SaleCreate(BaseModel):
     customer_id: Optional[UUID] = None
-    user_id: UUID
-    discount_amount: Decimal = Field(Decimal("0.00"), ge=0)
-    tax_amount: Decimal = Field(Decimal("0.00"), ge=0)
+    items: list[SaleItemInput] = Field(min_length=1, max_length=200)
+    discount_amount: Decimal = Field(default=Decimal("0.00"), ge=0, max_digits=10, decimal_places=2)
 
-class SaleUpdate(BaseModel):
-    status: Optional[SaleStatus] = None
+class BasketCreate(BaseModel):
     customer_id: Optional[UUID] = None
-    discount_amount: Optional[Decimal] = Field(None, ge=0)
-    tax_amount: Optional[Decimal] = Field(None, ge=0)
 
-class SaleResponse(BaseModel):
+class SaleItemRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    sale_item_id: UUID
+    product_id: UUID
+    quantity: int
+    unit_price: Decimal
+    total_price: Decimal
+
+class SaleRead(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
     sale_id: UUID
     customer_id: Optional[UUID]
     user_id: UUID
@@ -33,7 +41,4 @@ class SaleResponse(BaseModel):
     total_amount: Decimal
     status: SaleStatus
     sale_date: datetime
-    updated_at: datetime
-
-    class Config:
-        from_attributes = True
+    items: list[SaleItemRead]

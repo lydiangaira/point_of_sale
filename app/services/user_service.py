@@ -1,45 +1,46 @@
-from sqlalchemy.orm import Session
 from uuid import UUID
-from typing import List
+
 from fastapi import HTTPException, status
-from repositories.user_repository import UserRepository
-from schemas.user import UserCreate, UserUpdate 
-from models.user import User
-from services.security import get_password_hash
+from sqlalchemy.orm import Session
 
+from app.models.user import User, UserRole
+from app.repositories.user_repository import user_repository
+from app.schemas.user import UserCreate, UserUpdate
+from app.core.security import hash_password
 
-class UserService:
-    def __init__(self, db: Session):
-        self.repo = UserRepository(db)
+def create_user(db: Session, data: UserCreate) -> User:
+    if user_repository.get_by_username(db, data.username):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Username already exists")
+    if user_repository.get_by_email(db, data.email):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists")
 
-    def create_user(self, obj_in: UserCreate):
-        if self.repo.get_by_email(obj_in.email):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Email already registered."
-            )
-        
-        secure_hashed_password = get_password_hash(obj_in.password)
-        return self.repo.create(obj_in, hashed_password=secure_hashed_password)
+    values = data.model_dump(exclude={"password"})
+    values["hashed_password"] = hash_password(data.password)
+    return user_repository.create(db, values)
 
-    def update_user(self, user_id: int, obj_in: UserUpdate):
-        # 1. Fetch the existing user from the database
-        db_user = self.repo.get_by_id(user_id)
-        if not db_user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="User not found."
-            )
-        
-        # 2. Extract input data into a dictionary
-        update_data = obj_in.model_dump(exclude_unset=True)
-        
-        # 3. INTERCEPT PASSWORD CHANGES: Hash it safely if provided
-        if "password" in update_data and update_data["password"]:
-            secure_hashed_password = get_password_hash(update_data["password"])
-            update_data["hashed_password"] = secure_hashed_password
-            del update_data["password"] # Remove plain text from data dict
-            
-        # 4. Pass the cleaned update dictionary to your repository
-        return self.repo.update(db_user, update_data)
+def get_user(db: Session, user_id: UUID) -> User:
+    user = user_repository.get_by_id(db, user_id)
+    if user is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    return user
 
+def update_user(db: Session, user_id: UUID, data: UserUpdate, current_user: User) -> User:
+    user = get_user(db, user_id)
+
+    values = data.model_dump(exclude_unset=True)
+    if current_user.role != UserRole.ADMIN:
+        if user.user_id != current_user.user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not enough permissions")
+        values.pop("role", None)
+        values.pop("is_active", None)
+
+    if "email" in values and values["email"] != user.email and user_repository.get_by_email(db, values["email"]):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already exists")
+
+    return user_repository.update(db, user, values)
+
+def deactivate_user(db: Session, user_id: UUID, current_user: User) -> User:
+    if user_id == current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot deactivate your own account")
+    user = get_user(db, user_id)
+    return user_repository.update(db, user, {"is_active": False})

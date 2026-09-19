@@ -1,31 +1,39 @@
-from sqlalchemy.orm import Session
 from uuid import UUID
-from typing import List
+
 from fastapi import HTTPException, status
-from repositories.supplier_repository import SupplierRepository
-from schemas.supplier import SupplierCreate, SupplierUpdate
-from models.supplier import Supplier
+from sqlalchemy.orm import Session
+from typing import Optional
 
-class SupplierService:
-    def __init__(self, db: Session):
-        self.repo = SupplierRepository(db)
+from app.models.supplier import Supplier
+from app.repositories.supplier_repository import supplier_repository
+from app.schemas.supplier import SupplierCreate, SupplierUpdate
 
-    def create_supplier(self, obj_in: SupplierCreate) -> Supplier:
-        return self.repo.create(obj_in)
+def _check_duplicates(db: Session, email: Optional[str], phone: Optional[str], exclude_id: Optional[UUID]):
+    if email:
+        existing = supplier_repository.get_by_email(db, email)
+        if existing and existing.supplier_id != exclude_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already in use")
+    if phone:
+        existing = supplier_repository.get_by_phone(db, phone)
+        if existing and existing.supplier_id != exclude_id:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Phone number already in use")
 
-    def get_supplier_by_id(self, supplier_id: UUID) -> Supplier:
-        supplier = self.repo.get_by_id(supplier_id)
-        if not supplier:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier logistics index entity missing.")
-        return supplier
+def create_supplier(db: Session, data: SupplierCreate) -> Supplier:
+    _check_duplicates(db, data.email, data.phone_number)
+    return supplier_repository.create(db, data.model_dump())
 
-    def list_suppliers(self, skip: int = 0, limit: int = 100) -> List[Supplier]:
-        return self.repo.get_all(skip=skip, limit=limit)
+def get_supplier(db: Session, supplier_id: UUID) -> Supplier:
+    supplier = supplier_repository.get_by_id(db, supplier_id)
+    if supplier is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Supplier not found")
+    return supplier
 
-    def update_supplier(self, supplier_id: UUID, obj_in: SupplierUpdate) -> Supplier:
-        supplier = self.get_supplier_by_id(supplier_id)
-        return self.repo.update(supplier, obj_in)
+def update_supplier(db: Session, supplier_id: UUID, data: SupplierUpdate) -> Supplier:
+    supplier = get_supplier(db, supplier_id)
+    values = data.model_dump(exclude_unset=True)
+    _check_duplicates(db, values.get("email"), values.get("phone_number"), exclude_id=supplier_id)
+    return supplier_repository.update(db, supplier, values)
 
-    def delete_supplier(self, supplier_id: UUID) -> None:
-        supplier = self.get_supplier_by_id(supplier_id)
-        self.repo.delete(supplier)
+def deactivate_supplier(db: Session, supplier_id: UUID) -> Supplier:
+    supplier = get_supplier(db, supplier_id)
+    return supplier_repository.update(db, supplier, {"is_active": False})

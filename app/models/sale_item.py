@@ -2,7 +2,7 @@ from uuid import uuid4
 from sqlalchemy import Column, ForeignKey, Integer, Numeric
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
-from database import Base
+from app.database import Base
 
 class SaleItem(Base):
     __tablename__ = "sale_items"

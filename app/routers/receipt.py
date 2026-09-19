@@ -1,11 +1,19 @@
-from fastapi import APIRouter, Depends, status
+from uuid import UUID
+
+from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from database import get_db
-from schemas.receipt import ReceiptCreate, ReceiptResponse
-from repositories.receipt_repository import ReceiptRepository
 
-router = APIRouter(prefix="/receipts", tags=["Receipts"])
+from app.database import get_db
+from app.dependency import get_current_user
+from app.schemas.receipt import ReceiptCreate, ReceiptRead
+from app.services import receipt_service
 
-@router.post("/", response_model=ReceiptResponse, status_code=status.HTTP_201_CREATED)
-def issue_receipt(receipt_in: ReceiptCreate, db: Session = Depends(get_db)):
-    return ReceiptRepository(db).create_for_sale(receipt_in)
+router = APIRouter(prefix="/receipts", tags=["receipts"], dependencies=[Depends(get_current_user)])
+
+@router.post("", response_model=ReceiptRead, status_code=201)
+def create_receipt(data: ReceiptCreate, db: Session = Depends(get_db)):
+    return receipt_service.create_receipt(db, data)
+
+@router.get("/{receipt_id}", response_model=ReceiptRead)
+def get_receipt(receipt_id: UUID, db: Session = Depends(get_db)):
+    return receipt_service.get_receipt(db, receipt_id)

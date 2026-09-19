@@ -1,24 +1,16 @@
-from sqlalchemy.orm import Session
 from uuid import UUID
-from typing import List, Optional
-from models.payment import Payment
-from schemas.payment import PaymentCreate
 
-class PaymentRepository:
-    def __init__(self, db: Session):
-        self.db = db
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
-    def get_by_id(self, payment_id: UUID) -> Optional[Payment]:
-        return self.db.query(Payment).filter(Payment.payment_id == payment_id).first()
+from app.models.payment import Payment
+from app.repositories.base import BaseRepository
 
-    def create(self, obj_in: PaymentCreate) -> Payment:
-        db_payment = Payment(
-            sale_id=obj_in.sale_id,
-            payment_method=obj_in.payment_method.value,
-            amount=obj_in.amount,
-            status="Completed" # Default processed transition logic state
-        )
-        self.db.add(db_payment)
-        self.db.commit()
-        self.db.refresh(db_payment)
-        return db_payment
+
+class PaymentRepository(BaseRepository[Payment]):
+    def list_by_sale(self, db: Session, sale_id: UUID) -> list[Payment]:
+        stmt = select(Payment).where(Payment.sale_id == sale_id)
+        return list(db.scalars(stmt).all())
+
+
+payment_repository = PaymentRepository(Payment)

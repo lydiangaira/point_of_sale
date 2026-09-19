@@ -1,18 +1,20 @@
+from collections.abc import Generator
+
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
-from core.config import settings
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
-database_url = settings.DATABASE_URL
+from app.core.config import settings
 
-# Added pooling parameters for secure database connections
-engine = create_engine(database_url,
-                       connect_args={"options": "-c timezone=Africa/Nairobi"})
-session = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-Base = declarative_base()
+engine = create_engine(settings.database_url, pool_pre_ping=True)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
-def get_db():
-    db = session()
+
+class Base(DeclarativeBase):
+    pass
+
+
+def get_db() -> Generator[Session, None, None]:
+    db = SessionLocal()
     try:
         yield db
     finally:

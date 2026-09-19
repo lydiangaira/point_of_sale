@@ -1,18 +1,35 @@
-from sqlalchemy.orm import Session
+import secrets
+from datetime import datetime, timezone
 from uuid import UUID
+
 from fastapi import HTTPException, status
-from repositories.receipt_repository import ReceiptRepository
-from repositories.sale_repository import SaleRepository
-from schemas.receipt import ReceiptCreate
-from models.receipt import Receipt
+from sqlalchemy.orm import Session
 
-class ReceiptService:
-    def __init__(self, db: Session):
-        self.repo = ReceiptRepository(db)
-        self.sale_repo = SaleRepository(db)
+from app.models.receipt import Receipt
+from app.models.sale import SaleStatus
+from app.repositories.receipt_repository import receipt_repository
+from app.schemas.receipt import ReceiptCreate
+from app.services.sale_service import get_sale
 
-    def generate_receipt_for_sale(self, obj_in: ReceiptCreate) -> Receipt:
-        sale = self.sale_repo.get_by_id(obj_in.sale_id)
-        if not sale:
-            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Parent transaction sale ledger tracking target missing.")
-        return self.repo.create_for_sale(obj_in)
+def _generate_receipt_number() -> str:
+    return f"RCPT-{datetime.now(timezone.utc):%Y%m%d}-{secrets.token_hex(4).upper()}"
+
+def create_receipt(db: Session, data: ReceiptCreate) -> Receipt:
+    sale = get_sale(db, data.sale_id)
+    if sale.status != SaleStatus.COMPLETED:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Receipts can only be issued for completed sales")
+    if receipt_repository.get_by_sale(db, sale.sale_id):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="A receipt already exists for this sale")
+
+    values = {
+        "sale_id": sale.sale_id,
+        "format": data.format,
+        "receipt_number": _generate_receipt_number(),
+    }
+    return receipt_repository.create(db, values)
+
+def get_receipt(db: Session, receipt_id: UUID) -> Receipt:
+    receipt = receipt_repository.get_by_id(db, receipt_id)
+    if receipt is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Receipt not found")
+    return receipt
