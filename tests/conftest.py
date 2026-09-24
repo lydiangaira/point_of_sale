@@ -1,4 +1,3 @@
-# tests/conftest.py
 import os
 import pytest
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -7,6 +6,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
+from decimal import Decimal
+from uuid import UUID
 
 os.environ["DATABASE_URL"] = "sqlite://"
 os.environ["JWT_SECRET_KEY"] = "test-refresh-secret"
@@ -26,6 +27,7 @@ from app.database import Base, get_db
 from app.main import app
 from app.models.user import User, UserRole
 from app.core.security import hash_password
+from app.models.sale import Sale, SaleStatus
 
 engine = create_engine(
     "sqlite://",
@@ -108,3 +110,25 @@ def member_auth_headers(client):
     finally:
         db.close()
     return _login(client, user.username, password)
+
+@pytest.fixture
+def pending_sale_factory():
+    def _factory(user_id, customer_id=None):
+        db = TestingSessionLocal()
+        try:
+            sale = Sale(
+                user_id=UUID(str(user_id)),
+                customer_id=UUID(str(customer_id)) if customer_id else None,
+                status=SaleStatus.PENDING,
+                subtotal=Decimal("0.00"),
+                discount_amount=Decimal("0.00"),
+                tax_amount=Decimal("0.00"),
+                total_amount=Decimal("0.00"),
+            )
+            db.add(sale)
+            db.commit()
+            db.refresh(sale)
+            return sale
+        finally:
+            db.close()
+    return _factory

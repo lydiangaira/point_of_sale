@@ -8,11 +8,10 @@ from app.dependency import get_current_user, require_roles
 from app.models.user import User, UserRole
 from app.schemas.user import UserCreate, UserRead, UserUpdate
 from app.services import user_service
+from app.repositories.user_repository import user_repository
 
 router = APIRouter(prefix="/users", tags=["users"])
 
-# No POST /users/register anywhere in this API. Account creation always
-# goes through this admin-gated endpoint.
 admin_only = require_roles(UserRole.ADMIN)
 
 @router.post("", response_model=UserRead, status_code=201, dependencies=[Depends(admin_only)])
@@ -21,8 +20,6 @@ def create_user(data: UserCreate, db: Session = Depends(get_db)):
 
 @router.get("", response_model=list[UserRead], dependencies=[Depends(admin_only)])
 def list_users(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    from repositories.user_repository import user_repository
-
     return user_repository.list(db, skip=skip, limit=limit)
 
 @router.get("/{user_id}", response_model=UserRead, dependencies=[Depends(admin_only)])

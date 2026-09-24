@@ -6,6 +6,6 @@ from app.models.receipt import Receipt
 
 class ReceiptRepository(BaseRepository[Receipt]):
     def get_by_sale(self, db: Session, sale_id: UUID) -> Optional[Receipt]:
-        pass
+        return db.query(Receipt).filter(Receipt.sale_id == sale_id).first()
 
 receipt_repository = ReceiptRepository(Receipt)

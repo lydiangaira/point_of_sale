@@ -1,24 +1,27 @@
-from typing import Optional
-
 from datetime import datetime
 from decimal import Decimal
+from typing import Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.models.sale import SaleStatus
 
+
 class SaleItemInput(BaseModel):
     product_id: UUID
     quantity: int = Field(gt=0, le=10_000)
+
 
 class SaleCreate(BaseModel):
     customer_id: Optional[UUID] = None
     items: list[SaleItemInput] = Field(min_length=1, max_length=200)
     discount_amount: Decimal = Field(default=Decimal("0.00"), ge=0, max_digits=10, decimal_places=2)
 
+
 class BasketCreate(BaseModel):
     customer_id: Optional[UUID] = None
+
 
 class SaleItemRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -28,6 +31,7 @@ class SaleItemRead(BaseModel):
     quantity: int
     unit_price: Decimal
     total_price: Decimal
+
 
 class SaleRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)

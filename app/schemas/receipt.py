@@ -17,3 +17,5 @@ class ReceiptRead(BaseModel):
     receipt_number: str
     format: ReceiptFormat
     issued_date: datetime
+    issued_by_user_id: UUID
+    cashier_name: str

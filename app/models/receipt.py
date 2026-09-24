@@ -16,9 +16,15 @@ class Receipt(Base):
 
     receipt_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     sale_id = Column(UUID(as_uuid=True), ForeignKey("sales.sale_id", ondelete="CASCADE"), nullable=False)
+    issued_by_user_id = Column(UUID(as_uuid=True), ForeignKey("users.user_id", ondelete="RESTRICT"), nullable=False)
     receipt_number = Column(String(100), unique=True, nullable=False, index=True)
     format = Column(Enum(ReceiptFormat, name="receipt_format_enum", create_type=True), nullable=False, default=ReceiptFormat.PRINTED)
-    
+
     issued_date = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
     sale = relationship("Sale", back_populates="receipts")
+    issued_by = relationship("User")
+
+    @property
+    def cashier_name(self) -> str:
+        return f"{self.issued_by.first_name} {self.issued_by.last_name}"
